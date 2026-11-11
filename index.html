@@ -859,7 +859,6 @@ U<sub>T1</sub> = +R<sub>1</sub>U<sub>Z</sub>/(R<sub>1</sub>+R<sub>2</sub>)，U<s
   var BYID = {};
   QD.forEach(function (q) { BYID[q.id] = q; });
   var WEIGHT = { "判断": 1, "选择": 2, "简答": 4, "计算": 6 };
-  var CHS = ["ch0", "ch1", "ch2", "ch3", "ch4", "ch5", "ch6"];
 
   var LS_M = "md_mastered_v1", LS_W = "md_wrong_v1";
   var mastered = new Set(readLS(LS_M));
@@ -1157,7 +1156,11 @@ U<sub>T1</sub> = +R<sub>1</sub>U<sub>Z</sub>/(R<sub>1</sub>+R<sub>2</sub>)，U<s
   if (cAll) cAll.addEventListener("click", function () { setAll(false); });
 
   /* ---------- 启动 ---------- */
-  CHS.forEach(renderChapter);
+  /* 以页面里实际的题库宿主为准（data-ch 用的是 phasor/fb/wave/pw 这类键，
+     不能拿章节 id 去查，否则相量法、反馈、波形、功放四章题库全空） */
+  document.querySelectorAll(".qs[data-ch]").forEach(function (host) {
+    renderChapter(host.getAttribute("data-ch"));
+  });
   syncAll();
   renderWrong();
   onScroll();
