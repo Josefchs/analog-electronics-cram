@@ -238,6 +238,8 @@ footer.end{margin-top:60px;border-top:1px solid var(--line);padding:20px 0;font-
 .cta{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:8px;
   padding:8px 18px;font-size:14.5px;font-weight:700;font-family:inherit;cursor:pointer;line-height:1.5}
 .cta:hover{background:#25607d;border-color:#25607d}
+.cta.alt{background:#fff;color:var(--accent)}
+.cta.alt:hover{background:#f2f8fb;border-color:var(--accent);color:#25607d}
 .ghost{border:1px solid var(--line);background:#fff;color:#33404d;border-radius:8px;
   padding:8px 16px;font-size:14.5px;font-family:inherit;cursor:pointer;line-height:1.5}
 .ghost:hover{border-color:var(--accent-2);background:#fafdff}
@@ -290,6 +292,7 @@ body.mock-open #sidebar,body.mock-open #navbtn,body.mock-open .top{display:none}
     <div style="margin-top:6px">错题本：<b id="wcount">0</b> 题</div>
   </div>
   <button type="button" id="mockStart2" class="cta" style="width:100%;margin:12px 0 0;padding:8px 0;font-size:13.6px">🎯 模拟卷 · 随机出 40 题</button>
+  <button type="button" id="mockQuick2" class="cta alt" style="width:100%;margin:8px 0 0;padding:8px 0;font-size:13.6px">⚡ 随机抽 10 题快练</button>
   <p style="display:flex;gap:6px;margin:8px 0 0">
     <button type="button" class="jbtn" id="expandAll" style="flex:1;font-size:12.5px;padding:4px 0">展开全部</button>
     <button type="button" class="jbtn" id="collapseAll" style="flex:1;font-size:12.5px;padding:4px 0">收起全部</button>
@@ -314,7 +317,8 @@ body.mock-open #sidebar,body.mock-open #navbtn,body.mock-open .top{display:none}
   </div>
   <div class="herocta">
     <button type="button" id="mockStart" class="cta">🎯 开始模拟卷（随机 40 题）</button>
-    <small>按考试题型与前后半比例随机抽题，点选即判对错，答错自动进错题本；可随时「换一套题」。</small>
+    <button type="button" id="mockQuick" class="cta alt">⚡ 随机抽 10 题</button>
+    <small>模拟卷按考试题型与前后半比例抽 40 题；「随机抽 10 题」从全章节混合快练，适合碎片时间。两者都是点选即判对错，答错自动进错题本。</small>
   </div>
 </header>
 
@@ -1287,9 +1291,22 @@ U<sub>T1</sub> = +R<sub>1</sub>U<sub>Z</sub>/(R<sub>1</sub>+R<sub>2</sub>)，U<s
     return out;
   }
 
+  /* 选择题：打乱四个选项，并把「正确字母」重算到新位置，判分仍然按字母比对 */
+  function shuffleChoice(q) {
+    var pairs = (q.opts || []).map(function (t, i) { return { t: t, k: "ABCD"[i] }; });
+    shuffle(pairs);
+    var ans = "";
+    pairs.forEach(function (p, i) { if (p.k === q.ans) ans = "ABCD"[i]; });
+    return {
+      id: q.id, ch: q.ch, part: q.part, no: q.no, kp: q.kp, diff: q.diff,
+      ans: ans, stem: q.stem, ana: q.ana, fig: q.fig,
+      opts: pairs.map(function (p) { return p.t; })
+    };
+  }
+
   function buildPaperHTML() {
     var no = 0;
-    var h = ['<div class="mintro">本卷按考试结构随机抽取：判断 16（前三章 8 + 后三章 8）、选择 12（6 + 6）、简答 6（3 + 3）、计算 6（3 + 3，已剔除「提高」档），合计 100 分。同一套卷内不重复出题。</div>'];
+    var h = ['<div class="mintro">本卷按考试结构随机抽取：判断 16（前三章 8 + 后三章 8）、选择 12（6 + 6）、简答 6（3 + 3）、计算 6（3 + 3，已剔除「提高」档），合计 100 分。同一套卷内不重复出题；选择题的四个选项每次都会重新打乱（正确答案随之对应），别靠“选 B 就对了”的记法。</div>'];
     PAPER.forEach(function (spec, si) {
       var cnt = spec.front + spec.back;
       var seg = ['<div class="msec"><h3>' + ORD[si] + "、" + spec.part + "题" +
@@ -1297,7 +1314,9 @@ U<sub>T1</sub> = +R<sub>1</sub>U<sub>Z</sub>/(R<sub>1</sub>+R<sub>2</sub>)，U<s
       [["front", "前三章"], ["back", "后三章"]].forEach(function (half) {
         var got = pickSpread(poolOf(spec.part, HALF[half[0]]), spec[half[0]]);
         seg.push('<div class="mhalf">' + half[1] + " · " + got.length + " 题</div>");
-        got.forEach(function (q) { seg.push(cardHTML(q, ++no)); });
+        got.forEach(function (q) {
+          seg.push(cardHTML(spec.part === "选择" ? shuffleChoice(q) : q, ++no));
+        });
       });
       h.push('<div class="mpart" data-p="' + spec.part + '">' + seg.join("") + "</div>");
     });
@@ -1307,15 +1326,16 @@ U<sub>T1</sub> = +R<sub>1</sub>U<sub>Z</sub>/(R<sub>1</sub>+R<sub>2</sub>)，U<s
   function updateMockStat() {
     var st = document.getElementById("mstat");
     if (!mockEl || !st) return;
-    var total = 0, done = 0, right = 0;
+    var all = 0, total = 0, done = 0, right = 0;
     mockEl.querySelectorAll(".q").forEach(function (c) {
+      all++;
       var p = c.getAttribute("data-part");
       if (p === "判断" || p === "选择") total++;
       var d = c.getAttribute("data-done");
       if (d === "1" || d === "0") { done++; if (d === "1") right++; }
     });
     if (!done) {
-      st.textContent = "共 40 题 · 判断与选择 " + total + " 题，点选项即判对错";
+      st.textContent = "共 " + all + " 题 · 判断与选择 " + total + " 题，点选项即判对错";
     } else {
       st.textContent = "已答 " + done + " / " + total + " 题（判断+选择）· 答对 " + right +
         " · 正确率 " + Math.round(right / done * 100) + "%";
@@ -1340,19 +1360,44 @@ U<sub>T1</sub> = +R<sub>1</sub>U<sub>Z</sub>/(R<sub>1</sub>+R<sub>2</sub>)，U<s
     });
   }
 
-  function newPaper() {
+  /* ---------- 随机抽 10 题：全章节混合快练 ---------- */
+  var QUICK_N = 10;
+  var MODE = "paper";
+
+  function buildQuickHTML() {
+    var pool = QD.filter(function (q) {
+      return !(q.part === "计算" && q.diff === "提高");
+    });
+    var got = shuffle(pickSpread(pool, QUICK_N));
+    var h = ['<div class="mintro">随机抽 10 题快练：题目从全部章节混合抽取，判断题、选择题点选项立刻判对错，简答题、计算题展开看参考答案；答错同样会进错题本。点「换一套题」可再抽 10 题。</div>'];
+    h.push('<div class="mpart" data-p="*">');
+    got.forEach(function (q, i) { h.push(cardHTML(q, i + 1)); });
+    h.push("</div>");
+    return h.join("");
+  }
+
+  function newPaper(mode) {
     if (!mockEl) return;
+    MODE = mode || MODE;
     var body = document.getElementById("mock-body");
-    body.innerHTML = buildPaperHTML();
+    body.innerHTML = MODE === "quick" ? buildQuickHTML() : buildPaperHTML();
     body.querySelectorAll(".q[data-id]").forEach(syncCard);
+    var tabs = document.getElementById("mtabs");
+    if (tabs) tabs.style.display = MODE === "quick" ? "none" : "";
+    var sub = document.querySelector("#mock .mtitle small");
+    if (sub) {
+      sub.textContent = MODE === "quick"
+        ? "随机 10 题 · 判断 / 选择 / 简答 / 计算混合"
+        : "判断 16 · 选择 12 · 简答 6 · 计算 6 ｜ 前三章与后三章各一半";
+    }
     updateMockStat();
-    applyTab(curTab);
+    if (MODE === "paper") applyTab(curTab);
     mockEl.scrollTop = 0;
   }
 
-  function openMock() {
+  function openMock(mode) {
     if (!mockEl) return;
-    newPaper();
+    newPaper(mode);
     document.body.classList.add("mock-open");
     if (mockEl.setAttribute) mockEl.setAttribute("aria-hidden", "false");
     document.body.classList.remove("nav-open");
@@ -1367,7 +1412,11 @@ U<sub>T1</sub> = +R<sub>1</sub>U<sub>Z</sub>/(R<sub>1</sub>+R<sub>2</sub>)，U<s
 
   ["mockStart", "mockStart2"].forEach(function (id) {
     var b = document.getElementById(id);
-    if (b) b.addEventListener("click", function () { openMock(); });
+    if (b) b.addEventListener("click", function () { openMock("paper"); });
+  });
+  ["mockQuick", "mockQuick2"].forEach(function (id) {
+    var b = document.getElementById(id);
+    if (b) b.addEventListener("click", function () { openMock("quick"); });
   });
   mockEl && mockEl.querySelectorAll("#mtabs .mtab").forEach(function (b) {
     b.addEventListener("click", function () {
@@ -1392,6 +1441,7 @@ U<sub>T1</sub> = +R<sub>1</sub>U<sub>Z</sub>/(R<sub>1</sub>+R<sub>2</sub>)，U<s
   syncAll();
   renderWrong();
   onScroll();
+  if (location.hash === "#quick") openMock("quick");
 })();
 </script>
 </body>
