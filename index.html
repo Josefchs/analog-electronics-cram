@@ -269,6 +269,13 @@ body.mock-open #sidebar,body.mock-open #navbtn,body.mock-open .top{display:none}
   #mock .mbody{padding:4px 12px 30px}
 }
 .qno.dim{opacity:.55;font-size:11px}
+#mock .mtabs{display:flex;gap:6px;flex-wrap:wrap;width:100%;padding-top:8px;border-top:1px solid var(--line);margin-top:2px}
+#mock .mtab{border:1px solid var(--line);background:#fff;color:#33404d;border-radius:99px;
+  padding:4px 14px;font-size:13px;font-family:inherit;cursor:pointer;line-height:1.7}
+#mock .mtab:hover{border-color:var(--accent-2);background:#fafdff}
+#mock .mtab b{color:var(--muted);font-weight:400;margin-left:5px;font-size:11.5px}
+#mock .mtab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+#mock .mtab.on b{color:rgba(255,255,255,.85)}
 </style>
 </head>
 <body>
@@ -908,6 +915,13 @@ U<sub>T1</sub> = +R<sub>1</sub>U<sub>Z</sub>/(R<sub>1</sub>+R<sub>2</sub>)，U<s
       <button type="button" id="mockNew" class="cta">换一套题</button>
       <button type="button" id="mockBack" class="ghost">返回复习站</button>
     </div>
+    <div class="mtabs" id="mtabs">
+      <button type="button" class="mtab on" data-p="判断">一 判断题<b>16</b></button>
+      <button type="button" class="mtab" data-p="选择">二 选择题<b>12</b></button>
+      <button type="button" class="mtab" data-p="简答">三 简答题<b>6</b></button>
+      <button type="button" class="mtab" data-p="计算">四 计算题<b>6</b></button>
+      <button type="button" class="mtab" data-p="*">全部<b>40</b></button>
+    </div>
   </div>
   <div class="mbody" id="mock-body"></div>
   <div class="mfoot">本卷题目全部来自老师提供的三套题库；判分规则与复习站完全一致，答错的题会写进「错题本」。计算题已剔除标「提高」的最难档，简答与计算给的是参考答案，按「答题要点」分条写更容易拿分。</div>
@@ -1278,13 +1292,14 @@ U<sub>T1</sub> = +R<sub>1</sub>U<sub>Z</sub>/(R<sub>1</sub>+R<sub>2</sub>)，U<s
     var h = ['<div class="mintro">本卷按考试结构随机抽取：判断 16（前三章 8 + 后三章 8）、选择 12（6 + 6）、简答 6（3 + 3）、计算 6（3 + 3，已剔除「提高」档），合计 100 分。同一套卷内不重复出题。</div>'];
     PAPER.forEach(function (spec, si) {
       var cnt = spec.front + spec.back;
-      h.push('<div class="msec"><h3>' + ORD[si] + "、" + spec.part + "题" +
-             "<span>共 " + cnt + " 题 · 每题 " + spec.per + " 分 · 小计 " + (cnt * spec.per) + " 分</span></h3></div>");
+      var seg = ['<div class="msec"><h3>' + ORD[si] + "、" + spec.part + "题" +
+                 "<span>共 " + cnt + " 题 · 每题 " + spec.per + " 分 · 小计 " + (cnt * spec.per) + " 分</span></h3></div>"];
       [["front", "前三章"], ["back", "后三章"]].forEach(function (half) {
         var got = pickSpread(poolOf(spec.part, HALF[half[0]]), spec[half[0]]);
-        h.push('<div class="mhalf">' + half[1] + " · " + got.length + " 题</div>");
-        got.forEach(function (q) { h.push(cardHTML(q, ++no)); });
+        seg.push('<div class="mhalf">' + half[1] + " · " + got.length + " 题</div>");
+        got.forEach(function (q) { seg.push(cardHTML(q, ++no)); });
       });
+      h.push('<div class="mpart" data-p="' + spec.part + '">' + seg.join("") + "</div>");
     });
     return h.join("");
   }
@@ -1312,12 +1327,26 @@ U<sub>T1</sub> = +R<sub>1</sub>U<sub>Z</sub>/(R<sub>1</sub>+R<sub>2</sub>)，U<s
     if (card.closest && card.closest("#mock-body")) updateMockStat();
   }
 
+  var curTab = "判断";
+
+  function applyTab(p) {
+    curTab = p;
+    if (!mockEl) return;
+    mockEl.querySelectorAll(".mpart").forEach(function (sec) {
+      sec.style.display = (p === "*" || sec.getAttribute("data-p") === p) ? "" : "none";
+    });
+    mockEl.querySelectorAll("#mtabs .mtab").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-p") === p);
+    });
+  }
+
   function newPaper() {
     if (!mockEl) return;
     var body = document.getElementById("mock-body");
     body.innerHTML = buildPaperHTML();
     body.querySelectorAll(".q[data-id]").forEach(syncCard);
     updateMockStat();
+    applyTab(curTab);
     mockEl.scrollTop = 0;
   }
 
@@ -1339,6 +1368,12 @@ U<sub>T1</sub> = +R<sub>1</sub>U<sub>Z</sub>/(R<sub>1</sub>+R<sub>2</sub>)，U<s
   ["mockStart", "mockStart2"].forEach(function (id) {
     var b = document.getElementById(id);
     if (b) b.addEventListener("click", function () { openMock(); });
+  });
+  mockEl && mockEl.querySelectorAll("#mtabs .mtab").forEach(function (b) {
+    b.addEventListener("click", function () {
+      applyTab(b.getAttribute("data-p"));
+      mockEl.scrollTop = 0;
+    });
   });
   var mNew = document.getElementById("mockNew");
   if (mNew) mNew.addEventListener("click", function () { newPaper(); });
